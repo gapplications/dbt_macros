@@ -53,7 +53,7 @@
             {%- set _ = all_categories.append(x[1]) -%}
         {% endfor %}
 
-        SELECT 
+        SELECT
             {{granularity}}_id
             , STRUCT(
             {# if eligible is a category in source table then add the eligible flags #}
@@ -63,37 +63,37 @@
                     CASE
                         WHEN event_category = 'eligible'
                         AND event = 'eligible'
-                        THEN timestamp 
+                        THEN timestamp
                     END
             ) AS {{ product_name }}_first_eligible
             ,  MAX(
                 CASE
                     WHEN event_category = 'eligible'
                     AND event = 'eligible'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_last_eligible
             ,  MAX(
                 CASE
                     WHEN event_category = 'eligible'
                     AND event = 'not_eligible'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_last_not_eligible
-            ,  COUNT(DISTINCT 
+            ,  COUNT(DISTINCT
                 CASE
                     WHEN event_category = 'eligible'
                     AND event = 'eligible'
-                    THEN event_id 
+                    THEN event_id
                 END
             ) AS {{ product_name }}_eligible_count
             ,  CASE
-                WHEN 
+                WHEN
                     MAX(
                         CASE
                             WHEN event_category = 'eligible'
                             AND event = 'eligible'
-                            THEN timestamp 
+                            THEN timestamp
                         END
                     )
                     >
@@ -102,7 +102,7 @@
                             CASE
                                 WHEN event_category = 'eligible'
                                 AND event = 'not_eligible'
-                                THEN timestamp 
+                                THEN timestamp
                             END
                         )
                     , TIMESTAMP('2000-01-01')
@@ -117,25 +117,25 @@
             {# if aware is a category in source table then add the awareness flags #}
             {% if 'aware' in all_categories %}
             {% if 'eligible' in all_categories %}
-            , 
+            ,
             {% endif %}
             STRUCT(
             MIN(
                 CASE
                     WHEN event_category = 'aware'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_first_aware
             ,  MAX(
                 CASE
                     WHEN event_category = 'aware'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_last_aware
-            ,  COUNT(DISTINCT 
+            ,  COUNT(DISTINCT
                 CASE
                     WHEN event_category = 'aware'
-                    THEN event_id 
+                    THEN event_id
                 END
             ) AS {{ product_name }}_aware_count
             ) AS aware
@@ -145,49 +145,49 @@
             {# if onboarding is a category in source table then add the onboarding flags #}
             {% if 'onboarding' in all_categories %}
             {% if 'eligible' in all_categories or 'aware' in all_categories %}
-            , 
+            ,
             {% endif %}
             STRUCT(
             MIN(
                 CASE
                     WHEN event_category = 'onboarding'
                     AND event = 'applied'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_first_applied
             ,  MAX(
                 CASE
                     WHEN event_category = 'onboarding'
                     AND event = 'applied'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_last_applied
             ,  COUNT(DISTINCT
                 CASE
                     WHEN event_category = 'onboarding'
                     AND event = 'applied'
-                    THEN event_id 
+                    THEN event_id
                 END
             ) AS {{ product_name }}_applied_count
             , MIN(
                 CASE
                     WHEN event_category = 'onboarding'
                     AND event = 'declined'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_first_declined
             ,  MAX(
                 CASE
                     WHEN event_category = 'onboarding'
                     AND event = 'declined'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_last_declined
             ,  COUNT(DISTINCT
                 CASE
                     WHEN event_category = 'onboarding'
                     AND event = 'declined'
-                    THEN event_id 
+                    THEN event_id
                 END
             ) AS {{ product_name }}_declined_count
             ) AS onboarding
@@ -197,87 +197,134 @@
             {# if enabled is a category in source table then add the enabled flags #}
             {% if 'enabled' in all_categories %}
             {% if 'eligible' in all_categories or 'aware' in all_categories or 'onboarding' in all_categories %}
-            , 
+            ,
             {% endif %}
             STRUCT(
             MIN(
                 CASE
                     WHEN event_category = 'enabled'
                         AND event = 'enabled'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_first_enabled
             ,  MAX(
                 CASE
                     WHEN event_category = 'enabled'
                         AND event = 'enabled'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_last_enabled
             ,MIN(
                 CASE
                     WHEN event_category = 'enabled'
                         AND event = 'disabled'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_first_disabled
             ,  MAX(
                 CASE
                     WHEN event_category = 'enabled'
                         AND event = 'disabled'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_last_disabled
             ) AS enabled
             {% endif %}
 
+            # if engaged is a category in source table then add the enabled flags #}
+            {% if 'engaged' in all_categories %}
+            {% if 'enabled' in all_categories or 'eligible' in all_categories or 'aware' in all_categories or 'onboarding' in all_categories %}
+                        ,
+                        {% endif %}
+                        STRUCT(
+                        MIN(
+                            CASE
+                                WHEN event_category = 'engaged'
+                                    AND event = 'engaged'
+                                THEN timestamp
+                            END
+                        ) AS {{ product_name }}_first_engaged
+                        ,  MAX(
+                            CASE
+                                WHEN event_category = 'engaged'
+                                    AND event = 'engaged'
+                                THEN timestamp
+                            END
+                        ) AS {{ product_name }}_last_engaged
+                        ) AS engaged
+                        {% endif %}
+
+
+            # if intended is a category in source table then add the enabled flags #}
+            {% if 'intended' in all_categories %}
+            {% if 'enabled' in all_categories or 'eligible' in all_categories or 'aware' in all_categories or 'onboarding' in all_categories %}
+                        ,
+                        {% endif %}
+                        STRUCT(
+                        MIN(
+                            CASE
+                                WHEN event_category = 'intended'
+                                    AND event = 'intended'
+                                THEN timestamp
+                            END
+                        ) AS {{ product_name }}_first_intended
+                        ,  MAX(
+                            CASE
+                                WHEN event_category = 'intended'
+                                    AND event = 'intended'
+                                THEN timestamp
+                            END
+                        ) AS {{ product_name }}_last_intended
+                        ) AS intended
+                        {% endif %}
+
 
             {# if active is a category in source table then add the activity flags #}
             {% if 'active' in all_categories %}
             {% if 'eligible' in all_categories or 'aware' in all_categories or 'onboarding' in all_categories or 'enabled' in all_categories %}
-            , 
+            ,
             {% endif %}
             STRUCT(
             MIN(
                 CASE
                     WHEN event_category = 'active'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_first_active
             ,  MAX(
                 CASE
                     WHEN event_category = 'active'
-                    THEN timestamp 
+                    THEN timestamp
                 END
             ) AS {{ product_name }}_last_active
             , CASE
-                WHEN 
+                WHEN
                     MAX(
                         CASE
                             WHEN event_category = 'active'
-                            THEN timestamp 
+                            THEN timestamp
                         END
                     ) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {{ product_days_data['active_max_days'] }} DAY)
                 THEN TRUE
                 ELSE FALSE
             END AS {{ product_name }}_is_active
             , CASE
-                WHEN 
+                WHEN
                     MAX(
                         CASE
                             WHEN event_category = 'active'
-                            THEN timestamp 
+                            THEN timestamp
                         END
                     ) BETWEEN TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {{ product_days_data['inactive_max_days'] }} DAY) AND TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {{ product_days_data['active_max_days'] }} DAY)
                 THEN TRUE
                 ELSE FALSE
             END AS {{ product_name }}_is_inactive
             , CASE
-                WHEN 
+                WHEN
                     MAX(
                         CASE
                             WHEN event_category = 'active'
-                            THEN timestamp 
+                            THEN timestamp
                         END
                     ) < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {{ product_days_data['inactive_max_days'] }} DAY)
                 THEN TRUE
@@ -286,13 +333,13 @@
             ,  SUM(
                 CASE
                     WHEN event_category = 'active'
-                    THEN count 
+                    THEN count
                 END
             ) AS {{ product_name }}_active_count
             ,  SUM(
                 CASE
                     WHEN event_category = 'active'
-                    THEN amount 
+                    THEN amount
                 END
             ) AS {{ product_name }}_active_amount
             ) AS active
@@ -304,7 +351,7 @@
     {% endfor %}
 
 
-    , all_product_flags AS ( 
+    , all_product_flags AS (
 
         SELECT
             all_unique_ids.{{granularity}}_id
@@ -316,7 +363,7 @@
         FROM all_unique_ids
 
             {% for product_lifecycle_table in product_lifecycle_tables %}
-            LEFT JOIN _{{ product_lifecycle_table.identifier }} 
+            LEFT JOIN _{{ product_lifecycle_table.identifier }}
                 ON all_unique_ids.{{granularity}}_id = _{{ product_lifecycle_table.identifier }}.{{granularity}}_id
             {% endfor %}
         WHERE all_unique_ids.{{granularity}}_id IS NOT NULL

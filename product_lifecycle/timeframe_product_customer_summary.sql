@@ -1,4 +1,4 @@
-{% macro timeframe_product_customer_summary(time_granularity, product_lifecycle_tables, granularity) %}
+{% macro timeframe_product_customer_summary(time_granularity, product_lifecycle_tables, granularity,optional_start_date_override='') %}
 
 {#-
     WHAT THIS MACRO DOES:
@@ -31,22 +31,26 @@
 
 {# create a date spine of whatever granularity is given #}
 
-{% if time_granularity == 'day' %}
-    {% set spine_start = 'date_sub(current_date(), interval 90 day)' %}
-{% elif time_granularity == 'week' %}
-    {% set spine_start = 'date_sub(current_date(), interval 70 week)' %}
-{% elif time_granularity == 'month' %}
-    {% set spine_start = 'date_sub(current_date(), interval 18 month)' %}
-{% endif %}
+{%- if optional_start_date_override == '' -%}
+    {% if time_granularity == 'day' %}
+        {% set spine_start = 'date_sub(current_date(), interval 90 day)' %}
+    {% elif time_granularity == 'week' %}
+        {% set spine_start = 'date_sub(current_date(), interval 70 week)' %}
+    {% elif time_granularity == 'month' %}
+        {% set spine_start = 'date_sub(current_date(), interval 18 month)' %}
+    {% endif %}
 
-{%- set start_date_string = "date_trunc(" ~ spine_start ~", " ~ date_part_string ~ ")" -%}
+    {%- set start_date_string = "date_trunc(" ~ spine_start ~", " ~ date_part_string ~ ")" -%}
+{%- else -%}
+    {%- set start_date_string = "date_trunc('" ~ optional_start_date_override ~"', " ~ date_part_string ~ ")" -%}
+{%- endif -%}
 {%- set end_date_string = "date_sub(date_add(current_date(),interval 1 " ~ time_granularity ~ "), interval 1 day)" -%}
  WITH date_spine AS (
      {{ dbt_utils.date_spine(
         datepart = time_granularity,
         start_date = start_date_string,
         end_date = end_date_string
-        ) 
+        )
     }}
  )
 
@@ -63,7 +67,7 @@
 )
 
 , all_{{ granularity }}s_by_{{ time_granularity }} AS (
-    SELECT 
+    SELECT
         all_unique_ids.{{ granularity }}_id
         , date_spine.date_{{time_granularity}}
     FROM all_unique_ids
@@ -101,22 +105,22 @@
         {%- set _ = cte_list.append(cte_name) -%}
         , {{ cte_name }} AS (
 
-            SELECT 
+            SELECT
                 {# On the date granularity given get an aggregated count of all customers in that category #}
                 all_{{ granularity }}s_by_{{ time_granularity }}.{{ granularity }}_id
                 , all_{{ granularity }}s_by_{{ time_granularity }}.date_{{time_granularity}}
                 , COUNT(DISTINCT lc.product_entity_id) AS {{ product_name }}_is_{{ category }}_count
 
                 {# If dealing with the active category also aggregate the count and amount measures #}
-                {% if category == 'active' %}
-                , SUM(lc.count) AS {{ product_name }}_total_active_count
-                , SUM(lc.amount) AS {{ product_name }}_total_active_amount
+                {% if category == 'engaged' or category == 'intended' or category == 'active' %}
+                , SUM(lc.count) AS {{ product_name }}_total_{{ category }}_count
+                , SUM(lc.amount) AS {{ product_name }}_total_{{ category }}_amount
                 {% endif %}
 
             FROM all_{{ granularity }}s_by_{{ time_granularity }}
                 LEFT JOIN {{ product_lifecycle_table }} lc
                     {# For active we want to look at active in the period, so adjust the join #}
-                    {% if category == 'active' %}
+                    {% if category == 'engaged' or category == 'intended' or category == 'active' %}
                     ON DATE_TRUNC(DATE(all_{{ granularity }}s_by_{{ time_granularity }}.date_{{ time_granularity }}), {{ time_granularity }}) = DATE_TRUNC(DATE(lc.timestamp), {{ time_granularity }})
                     {% else %}
                     {# Otherwise look at everything up to and including that date #}
@@ -124,7 +128,7 @@
                     {% endif %}
                     AND all_{{ granularity }}s_by_{{ time_granularity }}.{{ granularity }}_id = lc.{{ granularity }}_id
             WHERE lc.event_category = '{{ category }}'
-                {% if category == 'enabled' %}
+                {% if category == 'eligible' or category == 'enabled' or category == 'engaged' or category == 'intended' %}
                 AND lc.event = '{{ category }}'
                 {% endif %}
             GROUP BY 1,2
@@ -135,7 +139,7 @@
         {# This looks at everyone who has been active in the last x days, 30 by default #}
         , {{ product_name }}_inactive_exclusions AS (
             SELECT
-                DISTINCT 
+                DISTINCT
                 all_{{ granularity }}s_by_{{ time_granularity }}.{{ granularity }}_id
                 , all_{{ granularity }}s_by_{{ time_granularity }}.date_{{time_granularity}}
             FROM all_{{ granularity }}s_by_{{ time_granularity }}
@@ -150,14 +154,14 @@
         {%- set _ = cte_list.append(cte_name) -%}
         , {{ cte_name }} AS (
             {# CTE for usage in the inactive window of x-y days ago, 30-180 by default #}
-            SELECT 
+            SELECT
                 all_{{ granularity }}s_by_{{ time_granularity }}.{{ granularity }}_id
                 , all_{{ granularity }}s_by_{{ time_granularity }}.date_{{time_granularity}}
                 , COUNT(DISTINCT CASE WHEN lc_inactive.count >= 1 THEN lc_inactive.product_entity_id END) AS {{ product_name }}_is_inactive_count
 
             FROM all_{{ granularity }}s_by_{{ time_granularity }}
                 LEFT JOIN {{ product_lifecycle_table }} lc_inactive
-                    ON DATE(lc_inactive.timestamp) BETWEEN 
+                    ON DATE(lc_inactive.timestamp) BETWEEN
                         DATE_SUB(all_{{ granularity }}s_by_{{ time_granularity }}.date_{{ time_granularity }}, INTERVAL {{ product_days_data['inactive_max_days'] }} DAY) AND DATE_SUB(all_{{ granularity }}s_by_{{ time_granularity }}.date_{{ time_granularity }}, INTERVAL {{ product_days_data['active_max_days'] }} DAY)
                     AND all_{{ granularity }}s_by_{{ time_granularity }}.{{ granularity }}_id = lc_inactive.{{ granularity }}_id
                     AND lc_inactive.event_category = '{{ category }}'
@@ -171,7 +175,7 @@
         {# Same logic for inactive applied for domant user count but this is > 180 days on inactivity #}
         , {{ product_name }}_dormant_exclusions AS (
             SELECT
-                DISTINCT 
+                DISTINCT
                 all_{{ granularity }}s_by_{{ time_granularity }}.{{ granularity }}_id
                 , all_{{ granularity }}s_by_{{ time_granularity }}.date_{{time_granularity}}
             FROM all_{{ granularity }}s_by_{{ time_granularity }}
@@ -186,7 +190,7 @@
         {%- set _ = cte_list.append(cte_name) -%}
         , {{ cte_name }} AS (
 
-            SELECT 
+            SELECT
                 all_{{ granularity }}s_by_{{ time_granularity }}.{{ granularity }}_id
                 , all_{{ granularity }}s_by_{{ time_granularity }}.date_{{time_granularity}}
                 , COUNT(DISTINCT CASE WHEN lc_dormant.count >= 1 THEN lc_dormant.product_entity_id END) AS {{ product_name }}_is_dormant_count
